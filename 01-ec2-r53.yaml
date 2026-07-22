@@ -1,0 +1,45 @@
+- name: create ec2 and r53
+  hosts: local
+  connection: local
+  vars:
+    ami_id: "ami-0220d79f3f480ecf5"
+    sg_id: "sg-03ff2631c7d5b0649"
+    zone_id: "Z09005143JOTSHTMIUST8"
+    domain_name: "heman.icu"
+    # instances:
+    #   - mongodb
+  tasks:
+  - name: ec2 instance
+    amazon.aws.ec2_instance:
+      name: "{{ item }}"
+      instance_type: t3.micro
+      security_group: "{{ sg_id }}"
+      image_id: "{{ ami_id }}"
+      tags:
+        Name: "{{ item }}"
+    loop: "{{ instances }}"
+    register: ec2_output
+
+  - name: r53 record
+    amazon.aws.route53:
+      state: present
+      hosted_zone_id: "{{ zone_id }}"
+      record: "{{ item.item }}.{{ domain_name }}"
+      type: A
+      ttl: 1
+      value: "{{ item.instances[0].private_ip_address }}"
+      overwrite: true
+    loop: "{{ ec2_output.results }}"
+
+  - name: r53 record
+    amazon.aws.route53:
+      state: present
+      hosted_zone_id: "{{ zone_id }}"
+      record: "{{ domain_name }}"
+      type: A
+      ttl: 1
+      value: "{{ item.instances[0].public_ip_address }}"
+      overwrite: true
+    loop: "{{ ec2_output.results }}"
+    when: item.item == "frontend"
+    
